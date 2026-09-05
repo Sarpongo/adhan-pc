@@ -976,6 +976,18 @@ class AdhanApp(tk.Tk):
             self.overlay.destroy()
             self.overlay = None
 
+    def overlay_enabled(self) -> bool:
+        return self.config_data.data["overlay"].get("enabled", True)
+
+    def toggle_overlay(self) -> None:
+        """Bascule rapide du widget permanent, depuis le menu de la barre des taches."""
+        overlay_cfg = self.config_data.data["overlay"]
+        overlay_cfg["enabled"] = not overlay_cfg.get("enabled", True)
+        self.config_data.save()
+        self._apply_overlay_setting()
+        if hasattr(self, "var_ov_enabled"):  # synchronise la case a cocher si ouverte
+            self.var_ov_enabled.set(overlay_cfg["enabled"])
+
     # ------------------------------------------------------------ evenements
     def _on_event(self, event: Event) -> None:
         log.info("declenchement : %s", event.key)

@@ -30,10 +30,14 @@ def build(app) -> object | None:
         """Renvoie l'action vers la boucle Tk (pystray tourne dans un thread)."""
         return lambda *_a: app.after(0, action)
 
+    def show_today():
+        app.show_window()
+        app.show_page("today")
+
     menu = pystray.Menu(
-        pystray.MenuItem("Ouvrir Adhan PC", run(app.show_window), default=True),
-        pystray.MenuItem("Horaires du jour", run(lambda: (app.show_window(),
-                                                          app.show_page("today")))),
+        pystray.MenuItem("Horaires du jour", run(show_today), default=True),
+        pystray.MenuItem("Widget permanent à l'écran", run(app.toggle_overlay),
+                         checked=lambda _item: app.overlay_enabled()),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Arrêter l'adhan", run(app.notifier.stop_audio)),
         pystray.MenuItem("Actualiser les horaires", run(lambda: app.load_mosque(refresh=True))),

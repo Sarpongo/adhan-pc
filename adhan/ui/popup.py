@@ -382,11 +382,15 @@ class PrayerCheck(_Popup):
                           fill=self.accent, font=self.f["arabic"])
 
         # Boutons a icone de mosquee : contour = pas encore, plein = confirme.
+        # Largeur calculee depuis les marges reelles de la carte (26*S de
+        # chaque cote) : l'ancien calcul supposait des boutons partant de 0
+        # alors qu'ils demarrent a 94*S, ce qui faisait deborder le second.
         by, bh = 92 * S, 46 * S
-        bw = (w - 32 * S) / 2
-        self._icon_button(104 * S - 10 * S, by, bw, bh, "Pas encore", self._no,
+        margin, gap = 26 * S, 12 * S
+        bw = (w - 2 * margin - gap) / 2
+        self._icon_button(margin, by, bw, bh, "Pas encore", self._no,
                           filled=False, fg=th.TEXT, fill=th.BG_SOFT)
-        self._icon_button(104 * S - 10 * S + bw + 12 * S, by, bw, bh, "J'ai prié", self._yes,
+        self._icon_button(margin + bw + gap, by, bw, bh, "J'ai prié", self._yes,
                           filled=True, fg=th.BG, fill=self.accent)
 
         y, x1, x2 = h - 20 * S, 46 * S, w - 46 * S
