@@ -75,6 +75,12 @@ DEFAULTS: dict[str, Any] = {
         "avoid_fullscreen_apps": True,  # ne pas recouvrir un jeu / une video
         "native_toast": True,           # notification Windows (centre de notifications)
     },
+    # Suivi post-adhan : "avez-vous prie ?" en alerte, plusieurs fois si besoin.
+    "post_check": {
+        "enabled": True,
+        "delays": [5, 10, 20],  # minutes apres l'adhan
+        "seconds": 45,          # duree d'affichage de chaque alerte
+    },
     "overlay": {
         "enabled": True,          # rappel permanent a l'ecran
         "opacity": 18,            # opacite en pourcentage
@@ -113,8 +119,12 @@ def _clamp(value: Any, low: int, high: int, fallback: int) -> int:
         return fallback
 
 
-def _clean_reminders(values: Any) -> list[int] | None:
-    """Normalise une liste de minutes: entiers > 0, uniques, tries decroissant."""
+def _clean_reminders(values: Any, reverse: bool = True) -> list[int] | None:
+    """Normalise une liste de minutes: entiers > 0, uniques, triees.
+
+    `reverse=True` pour un compte a rebours (rappels avant la priere),
+    `reverse=False` pour une chronologie (alertes apres l'adhan).
+    """
     if values is None:
         return None
     if not isinstance(values, (list, tuple)):
@@ -127,7 +137,7 @@ def _clean_reminders(values: Any) -> list[int] | None:
             continue
         if 0 < m <= 24 * 60:
             seen.add(m)
-    return sorted(seen, reverse=True)
+    return sorted(seen, reverse=reverse)
 
 
 class Config:
@@ -172,6 +182,9 @@ class Config:
         overlay = self.data["overlay"]
         overlay["opacity"] = _clamp(overlay.get("opacity"), 5, 100, 18)
         overlay["screen"] = _clamp(overlay.get("screen"), 0, 16, 0)
+        post = self.data["post_check"]
+        post["delays"] = _clean_reminders(post.get("delays"), reverse=False) or [5, 10, 20]
+        post["seconds"] = _clamp(post.get("seconds"), 5, 300, 45)
 
     # ------------------------------------------------------------ acces
     @property

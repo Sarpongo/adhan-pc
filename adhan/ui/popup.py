@@ -198,9 +198,15 @@ class Banner(_Popup):
         if not pulse:
             c.itemconfig(self._halo, state="hidden")
 
-        # Textes.
-        c.create_text(112 * S, 50 * S, text=title, anchor="w", fill=th.TEXT, font=self.f["h2"])
-        c.create_text(112 * S, 76 * S, text=subtitle, anchor="w", fill=th.MUTED, font=self.f["body"])
+        # Textes — tronques avec ellipse pour ne jamais deborder de la carte
+        # (le nom d'une mosquee n'est pas borne en longueur).
+        arabic_w = self.f["arabic"].measure(arabic) if arabic else 0
+        title_avail = w - 112 * S - 16 * S - (arabic_w + 14 * S if arabic else 0)
+        subtitle_avail = w - 112 * S - 16 * S
+        c.create_text(112 * S, 50 * S, text=th.fit_text(self.f["h2"], title, title_avail),
+                      anchor="w", fill=th.TEXT, font=self.f["h2"])
+        c.create_text(112 * S, 76 * S, text=th.fit_text(self.f["body"], subtitle, subtitle_avail),
+                      anchor="w", fill=th.MUTED, font=self.f["body"])
         if arabic:
             c.create_text(w - 26 * S, 50 * S, text=arabic, anchor="e",
                           fill=self.accent, font=self.f["arabic"])
@@ -278,6 +284,185 @@ class Banner(_Popup):
         self.dismiss()
 
 
+# Dimensions de reference de l'alerte de suivi post-adhan.
+CHECK_W, CHECK_H = 460, 200
+
+
+class PrayerCheck(_Popup):
+    """Alerte post-adhan : « avez-vous prie ? », avec boutons a icone de mosquee.
+
+    Distincte des rappels par sa couleur ambre et son icone pulsante, pour
+    ne pas se confondre avec une simple notification informative. Repond
+    « Oui » annule les alertes suivantes pour cette priere ; « Pas encore »
+    (ou l'expiration du delai) laisse les prochaines alertes se declencher
+    normalement.
+    """
+
+    def __init__(
+        self,
+        master: tk.Misc,
+        prayer_label: str,
+        subtitle: str,
+        arabic: str = "",
+        seconds: int = 45,
+        position: str = "bas-droite",
+        screen_index: int = 0,
+        on_yes: Callable[[], None] | None = None,
+        on_no: Callable[[], None] | None = None,
+        ornaments: bool = True,
+    ) -> None:
+        super().__init__(master)
+        self.accent = th.ALERT
+        self.on_yes = on_yes
+        self.on_no = on_no
+        self.position = position
+        self.total_ms = max(3, int(seconds)) * 1000
+        self.left_ms = self.total_ms
+        self._phase = 0.0
+        self._answered = False
+
+        self.screen = screens.screen_at(screen_index)
+        self.S = screens.ui_scale(self.screen)
+        self.W = round(CHECK_W * self.S)
+        self.H = round(CHECK_H * self.S)
+
+        self.configure(bg=th.CHROMA)
+        try:
+            self.attributes("-transparentcolor", th.CHROMA)
+        except tk.TclError:
+            self.configure(bg=th.BG_ALT)
+
+        self.f = th.fonts(self.S)
+        self.canvas = tk.Canvas(self, width=self.W, height=self.H, bg=th.CHROMA,
+                                highlightthickness=0, bd=0)
+        self.canvas.pack()
+        self._draw(prayer_label, subtitle, arabic, ornaments)
+        self._place()
+
+        self.fade_in()
+        self._tick()
+        self._pulse()
+
+    # ------------------------------------------------------------- dessin
+    def _draw(self, prayer_label: str, subtitle: str, arabic: str, ornaments: bool) -> None:
+        c, S = self.canvas, self.S
+        w, h = self.W - 4 * S, self.H - 5 * S
+
+        th.round_rect(c, 4 * S, 5 * S, w + 3 * S, h + 4 * S, r=20 * S, fill="#0f0a04", outline="")
+        th.round_rect(c, 0, 0, w, h, r=20 * S, fill=th.BG_ALT, outline="")
+        for i in range(40):
+            y = 2 * S + i * ((h - 4 * S) / 40)
+            c.create_line(3 * S, y, w - 3 * S, y, fill=th.mix(th.BG_SOFT, th.BG, i / 39))
+        th.round_rect(c, 0, 0, w, h, r=20 * S, fill="",
+                      outline=th.mix(th.LINE, self.accent, 0.5), width=max(1, 1.6 * S))
+        if ornaments:
+            th.arabesque_frame(c, 9 * S, 9 * S, w - 9 * S, h - 9 * S, self.accent,
+                               radius=15 * S, corner_r=8 * S)
+
+        # Icone de mosquee pulsante : le point d'alerte.
+        cx, cy, r = 60 * S, 56 * S, 24 * S
+        self._medallion = (cx, cy, r)
+        self._halo = c.create_oval(cx - r - 6 * S, cy - r - 6 * S, cx + r + 6 * S, cy + r + 6 * S,
+                                   outline=self.accent, width=max(1, 1.5 * S))
+        c.create_oval(cx - r, cy - r, cx + r, cy + r,
+                      fill=th.mix(th.BG, self.accent, 0.12), outline=self.accent, width=max(1, 1.2 * S))
+        th.mosque_glyph(c, cx, cy + r * 0.12, r * 0.62, self.accent,
+                        th.mix(th.BG, self.accent, 0.12), filled=True)
+
+        # Textes — memes precautions de troncature que la banniere.
+        arabic_w = self.f["arabic"].measure(arabic) if arabic else 0
+        title_avail = w - 104 * S - 16 * S - (arabic_w + 14 * S if arabic else 0)
+        subtitle_avail = w - 104 * S - 16 * S
+        c.create_text(104 * S, 34 * S, text=th.fit_text(self.f["h2"], prayer_label, title_avail),
+                      anchor="w", fill=th.TEXT, font=self.f["h2"])
+        c.create_text(104 * S, 60 * S, text=th.fit_text(self.f["small"], subtitle, subtitle_avail),
+                      anchor="w", fill=th.MUTED, font=self.f["small"])
+        if arabic:
+            c.create_text(w - 26 * S, 34 * S, text=arabic, anchor="e",
+                          fill=self.accent, font=self.f["arabic"])
+
+        # Boutons a icone de mosquee : contour = pas encore, plein = confirme.
+        by, bh = 92 * S, 46 * S
+        bw = (w - 32 * S) / 2
+        self._icon_button(104 * S - 10 * S, by, bw, bh, "Pas encore", self._no,
+                          filled=False, fg=th.TEXT, fill=th.BG_SOFT)
+        self._icon_button(104 * S - 10 * S + bw + 12 * S, by, bw, bh, "J'ai prié", self._yes,
+                          filled=True, fg=th.BG, fill=self.accent)
+
+        y, x1, x2 = h - 20 * S, 46 * S, w - 46 * S
+        c.create_rectangle(x1, y, x2, y + 3 * S, fill=th.mix(th.BG, self.accent, 0.18), outline="")
+        self._bar = c.create_rectangle(x1, y, x2, y + 3 * S, fill=self.accent, outline="")
+        self._bar_span = (x1, x2, y)
+
+    def _icon_button(self, x, y, w, h, text, command, filled: bool, fg: str, fill: str):
+        c, S = self.canvas, self.S
+        rect = th.round_rect(c, x, y, x + w, y + h, r=13 * S, fill=fill,
+                             outline="" if filled else th.LINE)
+        icon_cx = x + 20 * S
+        th.mosque_glyph(c, icon_cx, y + h / 2 + 2 * S, 9 * S, fg, fill,
+                        filled=filled, width=max(1, 1.3 * S))
+        label = c.create_text(x + 36 * S, y + h / 2, text=text, anchor="w", fill=fg, font=self.f["small"])
+        hover = th.mix(fill, "#ffffff", 0.18) if filled else th.LINE
+        for item in (rect, label):
+            c.tag_bind(item, "<Button-1>", lambda _e: command())
+            c.tag_bind(item, "<Enter>", lambda _e: (c.itemconfig(rect, fill=hover),
+                                                    c.config(cursor="hand2")))
+            c.tag_bind(item, "<Leave>", lambda _e: (c.itemconfig(rect, fill=fill),
+                                                    c.config(cursor="")))
+
+    # ---------------------------------------------------------- placement
+    def _place(self) -> None:
+        x, y = screens.anchor_box(self.screen, self.position, self.W, self.H, margin=round(20 * self.S))
+        self._target = (x, y)
+        self._slide = round((-46 if "gauche" in self.position else 46) * self.S)
+        self.geometry(f"{self.W}x{self.H}+{x + self._slide}+{y}")
+
+    def _on_fade(self, eased: float) -> None:
+        x, y = self._target
+        self.geometry(f"{self.W}x{self.H}+{int(x + self._slide * (1 - eased))}+{y}")
+
+    # ---------------------------------------------------------- animation
+    def _pulse(self) -> None:
+        if self._closing or not self.winfo_exists():
+            return
+        self._phase += 0.13
+        cx, cy, r = self._medallion
+        grow = 7 * self.S * (1 + math.sin(self._phase)) / 2
+        pad = 4 * self.S + grow
+        self.canvas.coords(self._halo, cx - r - pad, cy - r - pad, cx + r + pad, cy + r + pad)
+        t = 0.35 + 0.5 * (1 + math.sin(self._phase)) / 2
+        self.canvas.itemconfig(self._halo, outline=th.mix(th.BG, self.accent, t))
+        self._after(45, self._pulse)
+
+    def _tick(self) -> None:
+        if self._closing or not self.winfo_exists():
+            return
+        self.left_ms -= 100
+        ratio = max(0.0, self.left_ms / self.total_ms)
+        x1, x2, y = self._bar_span
+        self.canvas.coords(self._bar, x1, y, x1 + (x2 - x1) * ratio, y + 3 * self.S)
+        if self.left_ms <= 0:
+            # Expiration sans reponse = equivalent a « pas encore » : les
+            # prochaines alertes ne sont pas annulees.
+            self.dismiss()
+            return
+        self._after(100, self._tick)
+
+    def _yes(self) -> None:
+        if not self._answered:
+            self._answered = True
+            if self.on_yes:
+                self.on_yes()
+        self.dismiss()
+
+    def _no(self) -> None:
+        if not self._answered:
+            self._answered = True
+            if self.on_no:
+                self.on_no()
+        self.dismiss()
+
+
 class Fullscreen(_Popup):
     """Voile plein ecran, tres visible, pour l'adhan."""
 
@@ -351,11 +536,16 @@ class Fullscreen(_Popup):
         else:
             th.crescent(c, mx, my, r * 0.6, self.accent, th.BG)
 
+        # Le titre est borne (liste fixe de prieres) mais le nom de mosquee
+        # dans le sous-titre ne l'est pas : on le tronque par securite.
+        text_avail = w - 2 * margin - 60 * S
         if arabic:
             c.create_text(mx, cy - h * 0.09, text=arabic, fill=self.accent, font=self.f["arabic_big"])
-        c.create_text(mx, cy - h * 0.03, text=title, fill=th.TEXT, font=self.f["huge"])
+        c.create_text(mx, cy - h * 0.03, text=th.fit_text(self.f["huge"], title, text_avail),
+                      fill=th.TEXT, font=self.f["huge"])
         c.create_text(mx, cy + h * 0.065, text=clock, fill=self.accent, font=self.f["huge_clock"])
-        c.create_text(mx, cy + h * 0.13, text=subtitle, fill=th.MUTED, font=self.f["h3"])
+        c.create_text(mx, cy + h * 0.13, text=th.fit_text(self.f["h3"], subtitle, text_avail),
+                      fill=th.MUTED, font=self.f["h3"])
 
         by, bh = cy + h * 0.19, 46 * S
         if self.on_stop:

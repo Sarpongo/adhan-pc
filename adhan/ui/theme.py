@@ -17,6 +17,7 @@ GOLD = "#f0c46a"        # accent principal
 GOLD_DIM = "#c9a253"
 GREEN = "#4ec98f"       # etat OK
 RED = "#e2725b"         # alerte / arret
+ALERT = "#f0a04b"       # ambre — alertes de suivi (post-adhan), distinct de l'accent choisi
 
 # Couleurs d'accent proposees pour les notifications.
 ACCENTS = {
@@ -64,6 +65,29 @@ def fonts(scale: float = 1.0) -> dict[str, tkfont.Font]:
 
 
 # ------------------------------------------------------------- couleurs
+def fit_text(font: tkfont.Font, text: str, max_width: float, ellipsis: str = "…") -> str:
+    """Tronque `text` avec une ellipse pour qu'il tienne dans `max_width` px.
+
+    Necessaire car aucune chaine dynamique (nom de mosquee notamment, non
+    borne en longueur) ne doit jamais deborder d'une carte de notification.
+    """
+    if max_width <= 0:
+        return ""
+    if font.measure(text) <= max_width:
+        return text
+    ell_w = font.measure(ellipsis)
+    if ell_w >= max_width:
+        return ellipsis
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if font.measure(text[:mid]) + ell_w <= max_width:
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + ellipsis
+
+
 def mix(color_a: str, color_b: str, t: float) -> str:
     """Interpolation lineaire entre deux couleurs #rrggbb."""
     t = max(0.0, min(1.0, t))
@@ -171,6 +195,35 @@ def arabesque_frame(
         cx = start + i * step
         diamond(canvas, cx, y1 + 5, 2.6, faint)
         diamond(canvas, cx, y2 - 5, 2.6, faint)
+
+
+def mosque_glyph(canvas: tk.Canvas, cx: float, cy: float, s: float, color: str, bg: str,
+                  filled: bool = True, width: float = 1.6):
+    """Silhouette de mosquee (dome, base, minarets) — icone de priere.
+
+    `s` est une demi-echelle : l'icone occupe environ 2.4*s de large et
+    2.2*s de haut. `bg` est la couleur du fond immediatement derriere
+    l'icone (bouton ou carte), utilisee pour le creux du croissant.
+    `filled=False` dessine un simple contour (etat non valide/en attente).
+    """
+    opts = {"fill": color, "outline": ""} if filled else {"fill": "", "outline": color, "width": width}
+
+    base_w, base_h = s * 2.0, s * 0.6
+    canvas.create_rectangle(cx - base_w / 2, cy + s * 0.2, cx + base_w / 2, cy + s * 0.2 + base_h, **opts)
+
+    dome_w = s * 1.1
+    canvas.create_arc(cx - dome_w / 2, cy - dome_w * 0.75, cx + dome_w / 2, cy + dome_w * 0.35,
+                      start=0, extent=180, style="pieslice" if filled else "arc", **opts)
+
+    for side in (-1, 1):
+        mx = cx + side * s * 0.95
+        mw = s * 0.16
+        canvas.create_rectangle(mx - mw / 2, cy - s * 0.05, mx + mw / 2, cy + s * 0.2 + base_h, **opts)
+        canvas.create_oval(mx - mw * 0.9, cy - s * 0.35, mx + mw * 0.9, cy - s * 0.05 + mw, **opts)
+
+    tip_y = cy - dome_w * 0.75
+    canvas.create_line(cx, tip_y, cx, tip_y - s * 0.32, fill=color, width=max(1, width))
+    crescent(canvas, cx, tip_y - s * 0.4, s * 0.14, color, bg)
 
 
 def crescent(canvas: tk.Canvas, cx: float, cy: float, r: float, color: str, bg: str):

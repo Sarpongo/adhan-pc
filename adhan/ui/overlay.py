@@ -161,6 +161,7 @@ class Overlay(tk.Toplevel):
             self.t_time = c.create_text(w - 10 * S, h / 2, text="", anchor="e",
                                         fill=self.accent, font=self.f["small"])
             self.t_delay = None
+            self._time_avail = w - tx - 20 * S
         else:
             self.t_name = c.create_text(tx, 28 * S, text="—", anchor="w",
                                         fill=th.TEXT, font=self.f["h3"])
@@ -168,6 +169,9 @@ class Overlay(tk.Toplevel):
                                         fill=th.MUTED, font=self.f["small"])
             self.t_delay = c.create_text(w - 16 * S, 40 * S, text="", anchor="e",
                                          fill=self.accent, font=self.f["clock_sm"])
+            # Largeur disponible pour la ligne heure+mosquee, mesuree en pixels :
+            # un nom de mosquee n'est pas borne en longueur.
+            self._time_avail = w - tx - 14 * S
 
     # ----------------------------------------------------------- interaction
     def _bind_events(self) -> None:
@@ -215,7 +219,7 @@ class Overlay(tk.Toplevel):
         c = self.canvas
         if prayer_time is None:
             c.itemconfig(self.t_name, text="Aucun horaire")
-            c.itemconfig(self.t_time, text=mosque or "")
+            c.itemconfig(self.t_time, text=th.fit_text(self.f["small"], mosque or "", self._time_avail))
             if self.t_delay:
                 c.itemconfig(self.t_delay, text="—")
             return
@@ -225,5 +229,6 @@ class Overlay(tk.Toplevel):
             c.itemconfig(self.t_time, text=delay)
         else:
             c.itemconfig(self.t_name, text=prayer_label)
-            c.itemconfig(self.t_time, text=f"{prayer_time:%H:%M}  ·  {mosque}"[:38])
+            line = f"{prayer_time:%H:%M}  ·  {mosque}"
+            c.itemconfig(self.t_time, text=th.fit_text(self.f["small"], line, self._time_avail))
             c.itemconfig(self.t_delay, text=delay)

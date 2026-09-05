@@ -66,6 +66,7 @@ class AdhanApp(tk.Tk):
         self._setup_window()
         self.notifier = Notifier(self, self.config_data, self.player)
         self.scheduler = Scheduler(self.config_data, self._on_event)
+        self.notifier.scheduler = self.scheduler
 
         self._build()
         self._apply_overlay_setting()
@@ -402,6 +403,41 @@ class AdhanApp(tk.Tk):
                  fonts=self.f).pack(side="left")
         w.button(preview, "Aperçu de l'adhan",
                  lambda: self.notifier.preview("adhan"), fonts=self.f).pack(side="left", padx=6)
+
+        # ------------------------------------------------------ suivi post-adhan
+        post = self.config_data.data["post_check"]
+        checksec = w.section(root, "Suivi post-adhan",
+                             "Après l'adhan, une alerte demande si vous avez prié — "
+                             "en boucle jusqu'à ce que vous répondiez « J'ai prié ». "
+                             "S'applique aux prières pour lesquelles l'adhan est activé.",
+                             self.f)
+        checksec.pack(fill="x", pady=(round(18 * S), 0))
+        c3 = tk.Frame(checksec.body, bg=th.BG_ALT)
+        c3.pack(fill="x", padx=round(16 * S), pady=round(14 * S))
+
+        self.var_check_enabled = tk.BooleanVar(value=post.get("enabled", True))
+        w.checkbox(c3, "Activer le suivi post-adhan", self.var_check_enabled,
+                   self._save_post_check, fonts=self.f).pack(anchor="w", pady=(0, round(10 * S)))
+
+        self.post_chips = tk.Frame(c3, bg=th.BG_ALT)
+        self.post_chips.pack(fill="x", pady=(0, round(10 * S)))
+        add3 = tk.Frame(c3, bg=th.BG_ALT)
+        add3.pack(anchor="w")
+        self.var_new_post_delay = tk.StringVar()
+        ent3 = w.entry(add3, self.var_new_post_delay, self.f, width=6)
+        ent3.pack(side="left", ipady=round(5 * S))
+        ent3.bind("<Return>", lambda _e: self._add_post_delay())
+        w.label(add3, "minutes après l'adhan", "small", th.MUTED, th.BG_ALT, self.f).pack(
+            side="left", padx=6)
+        w.button(add3, "Ajouter", self._add_post_delay, primary=True, fonts=self.f).pack(side="left")
+        w.button(add3, "Rétablir 5/10/20", lambda: self._set_post_delays([5, 10, 20]),
+                 fonts=self.f).pack(side="left", padx=6)
+
+        preview3 = tk.Frame(checksec.body, bg=th.BG_ALT)
+        preview3.pack(anchor="w", padx=round(16 * S), pady=(0, round(14 * S)))
+        w.button(preview3, "Aperçu de l'alerte", lambda: self.notifier.preview("check"),
+                 fonts=self.f).pack(side="left")
+        self._refresh_post_chips()
 
         # ------------------------------------------------------------ widget
         ov = self.config_data.data["overlay"]
@@ -752,6 +788,48 @@ class AdhanApp(tk.Tk):
         self.config_data.data["reminders"] = values
         self._commit()
         self._refresh_chips()
+
+    def _refresh_post_chips(self) -> None:
+        for child in self.post_chips.winfo_children():
+            child.destroy()
+        for minutes in self.config_data.data["post_check"]["delays"]:
+            chip = tk.Frame(self.post_chips, bg=th.BG_SOFT, highlightbackground=th.LINE,
+                            highlightthickness=1)
+            chip.pack(side="left", padx=(0, round(6 * self.S)))
+            w.label(chip, f"+{minutes} min", "small", th.TEXT, th.BG_SOFT, self.f).pack(
+                side="left", padx=(round(10 * self.S), 4), pady=round(5 * self.S))
+            x = tk.Label(chip, text="✕", font=self.f["tiny"], bg=th.BG_SOFT, fg=th.MUTED,
+                         cursor="hand2", padx=round(8 * self.S))
+            x.pack(side="left")
+            x.bind("<Button-1>", lambda _e, m=minutes: self._remove_post_delay(m))
+            x.bind("<Enter>", lambda _e, lbl=x: lbl.config(fg=th.RED))
+            x.bind("<Leave>", lambda _e, lbl=x: lbl.config(fg=th.MUTED))
+
+    def _add_post_delay(self) -> None:
+        raw = self.var_new_post_delay.get().strip()
+        try:
+            minutes = int(raw)
+        except ValueError:
+            self.set_status("Entrez un nombre de minutes.", error=True)
+            return
+        if not 0 < minutes <= 1440:
+            self.set_status("Le délai doit être compris entre 1 et 1440 minutes.", error=True)
+            return
+        self._set_post_delays(self.config_data.data["post_check"]["delays"] + [minutes])
+        self.var_new_post_delay.set("")
+
+    def _remove_post_delay(self, minutes: int) -> None:
+        self._set_post_delays(
+            [m for m in self.config_data.data["post_check"]["delays"] if m != minutes])
+
+    def _set_post_delays(self, values: list[int]) -> None:
+        self.config_data.data["post_check"]["delays"] = values
+        self._commit()
+        self._refresh_post_chips()
+
+    def _save_post_check(self, *_args) -> None:
+        self.config_data.data["post_check"]["enabled"] = bool(self.var_check_enabled.get())
+        self._commit()
 
     def _save_prayer(self, key: str) -> None:
         v = self.prayer_vars[key]

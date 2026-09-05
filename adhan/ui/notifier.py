@@ -10,9 +10,9 @@ from .. import notify, screens
 from ..audio import Player, beep
 from ..config import Config, PRAYER_LABELS, PRAYER_LABELS_AR
 from ..paths import resolve_audio
-from ..scheduler import Event
+from ..scheduler import Event, Scheduler
 from . import theme as th
-from .popup import Banner, Fullscreen
+from .popup import Banner, Fullscreen, PrayerCheck
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +25,9 @@ class Notifier:
         self.config = config
         self.player = player
         self.mosque_name = ""
+        # Branche apres coup par l'appelant (app.py) : necessaire pour que
+        # "J'ai prie" puisse annuler les alertes de suivi restantes.
+        self.scheduler: Scheduler | None = None
 
     # --------------------------------------------------------------- reglages
     @property
@@ -48,7 +51,6 @@ class Notifier:
     # ------------------------------------------------------------ declenchement
     def handle(self, event: Event) -> None:
         """Point d'entree appele par le planificateur."""
-        label = PRAYER_LABELS.get(event.prayer, event.prayer.title())
         arabic = PRAYER_LABELS_AR.get(event.prayer, "")
         when = event.prayer_time or event.when
         subtitle = f"{when:%H:%M}  ·  {self.mosque_name}" if self.mosque_name else f"{when:%H:%M}"
@@ -57,6 +59,9 @@ class Notifier:
             self._play_adhan(event.prayer)
             self.show(event.label, subtitle, arabic, kind="adhan",
                       clock=f"{when:%H:%M}", stoppable=True)
+        elif event.kind == "check":
+            self._show_check(event.prayer, event.minutes, when)
+            return  # notification dediee : pas de doublon banniere/toast standard
         else:
             if self.config.data["audio"].get("reminder_sound", True):
                 beep("reminder")
@@ -75,6 +80,32 @@ class Notifier:
 
     def stop_audio(self) -> None:
         self.player.stop()
+
+    # --------------------------------------------------------- suivi post-adhan
+    def _show_check(self, prayer: str, minutes_after: int, prayer_time: dt.datetime) -> None:
+        """Alerte « avez-vous prie ? », `minutes_after` minutes apres l'adhan."""
+        post = self.config.data["post_check"]
+        if not post.get("enabled", True) or not self.settings.get("popup", True):
+            return
+        label = PRAYER_LABELS.get(prayer, prayer.title())
+        subtitle = f"{label} était à {prayer_time:%H:%M}  ·  il y a {minutes_after} min"
+        s = self.settings
+        day = prayer_time.date()
+
+        def on_yes() -> None:
+            if self.scheduler:
+                self.scheduler.mark_prayed(prayer, day)
+
+        try:
+            PrayerCheck(
+                self.root, prayer_label=f"Avez-vous prié le {label} ?", subtitle=subtitle,
+                arabic=PRAYER_LABELS_AR.get(prayer, ""), seconds=post.get("seconds", 45),
+                position=s.get("position", "bas-droite"), screen_index=s.get("screen", 0),
+                on_yes=on_yes, ornaments=s.get("ornaments", True),
+            )
+            beep("warn")
+        except tk.TclError:
+            log.exception("affichage de l'alerte de suivi impossible")
 
     # ----------------------------------------------------------------- affichage
     def show(self, title: str, subtitle: str, arabic: str = "", kind: str = "reminder",
@@ -106,6 +137,9 @@ class Notifier:
         """Apercu depuis l'interface, sans toucher au planning."""
         label = PRAYER_LABELS.get(prayer, prayer.title())
         now = dt.datetime.now()
+        if kind == "check":
+            self._show_check(prayer, 10, now)
+            return
         subtitle = f"{now:%H:%M}  ·  {self.mosque_name or 'Aperçu'}"
         title = f"{label} — il est l'heure" if kind == "adhan" else f"{label} dans 15 minutes"
         if kind == "adhan" and with_sound:

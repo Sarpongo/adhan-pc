@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .config import Config, PRAYER_KEYS, PRAYER_LABELS
+from .config import ADHAN_KEYS, Config, PRAYER_KEYS, PRAYER_LABELS
 from . import times as tmod
 
 log = logging.getLogger(__name__)
@@ -21,9 +21,9 @@ HORIZON_DAYS = 2
 @dataclass(frozen=True)
 class Event:
     when: dt.datetime
-    kind: str          # "reminder" ou "adhan"
+    kind: str          # "reminder", "adhan" ou "check" (suivi post-adhan)
     prayer: str
-    minutes: int = 0   # minutes avant la priere (0 pour l'adhan)
+    minutes: int = 0   # minutes avant la priere (rappel) ou apres (check) ; 0 pour l'adhan
     prayer_time: dt.datetime | None = None
 
     @property
@@ -35,6 +35,8 @@ class Event:
         name = PRAYER_LABELS.get(self.prayer, self.prayer.title())
         if self.kind == "adhan":
             return f"{name} — il est l'heure"
+        if self.kind == "check":
+            return f"Avez-vous prié le {name} ?"
         if self.minutes >= 60:
             h, m = divmod(self.minutes, 60)
             delay = f"{h} h" if not m else f"{h} h {m:02d}"
@@ -84,12 +86,20 @@ class Scheduler:
                 entry = self.config.prayer(prayer)
                 if not entry.get("enabled", True):
                     continue
-                if entry.get("adhan", False):
+                has_adhan = entry.get("adhan", False)
+                if has_adhan:
                     events.append(Event(when, "adhan", prayer, 0, when))
                 for minutes in self.config.reminders_for(prayer):
                     events.append(
                         Event(when - dt.timedelta(minutes=minutes), "reminder", prayer, minutes, when)
                     )
+                # Suivi "avez-vous prie ?" : uniquement pour les prieres avec adhan.
+                post = self.config.data["post_check"]
+                if has_adhan and prayer in ADHAN_KEYS and post.get("enabled", True):
+                    for minutes in post.get("delays", []):
+                        events.append(
+                            Event(when + dt.timedelta(minutes=minutes), "check", prayer, minutes, when)
+                        )
 
         events.sort(key=lambda e: e.when)
         # Les evenements deja expires ne doivent jamais se declencher a posteriori.
@@ -123,6 +133,18 @@ class Scheduler:
             except Exception:  # une notification ratee ne doit pas tuer la boucle
                 log.exception("echec du declenchement de %s", ev.key)
         return due
+
+    def mark_prayed(self, prayer: str, day: dt.date) -> None:
+        """Annule les alertes 'avez-vous prie ?' restantes pour cette priere.
+
+        Les evenements "check" deja planifies pour ce jour et cette priere
+        sont simplement marques comme declenches : tick() les ignorera sans
+        rouvrir de notification.
+        """
+        prefix = f"{day.isoformat()}|{prayer}|check|"
+        for ev in self.events:
+            if ev.key.startswith(prefix):
+                self._fired.add(ev.key)
 
     # ------------------------------------------------------------ lecture
     def next_event(self, now: dt.datetime | None = None) -> Event | None:
