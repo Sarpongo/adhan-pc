@@ -1,0 +1,14 @@
+# Artefacts de build (reconstructibles via PyInstaller / Inno Setup)
+build/
+dist/
+installer_output/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+
+# Raccourci local (chemins propres a la machine de developpement)
+*.lnk
+
+# Configuration/cache utilisateur (vit dans %APPDATA%, jamais dans le projet)
