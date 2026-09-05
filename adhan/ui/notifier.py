@@ -116,18 +116,23 @@ class Notifier:
         s = self.settings
         seconds = s.get("adhan_seconds", 90) if kind == "adhan" else s.get("popup_seconds", 25)
         on_stop = self.stop_audio if stoppable else None
+        # Tant que l'adhan joue, la notification ne doit pas se fermer toute
+        # seule : sinon un delai d'affichage court laisserait le son continuer
+        # sans plus aucun bouton pour l'arreter.
+        stay_while = self.player.is_playing if stoppable else None
         try:
             if self._style(kind) == "plein-ecran":
                 Fullscreen(self.root, title=title, subtitle=subtitle, clock=clock or "",
                            arabic=arabic, accent=self.accent, seconds=seconds,
                            screen_index=s.get("screen", 0), on_stop=on_stop,
-                           ornaments=s.get("ornaments", True))
+                           ornaments=s.get("ornaments", True), stay_while=stay_while)
             else:
                 Banner(self.root, title=title, subtitle=subtitle, arabic=arabic,
                        accent=self.accent, seconds=seconds,
                        position=s.get("position", "bas-droite"),
                        screen_index=s.get("screen", 0), on_stop=on_stop,
-                       pulse=(kind == "adhan"), ornaments=s.get("ornaments", True))
+                       pulse=(kind == "adhan"), ornaments=s.get("ornaments", True),
+                       stay_while=stay_while)
         except tk.TclError:
             log.exception("affichage de la notification impossible")
 

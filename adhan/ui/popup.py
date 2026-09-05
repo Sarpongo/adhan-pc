@@ -129,6 +129,7 @@ class Banner(_Popup):
         on_stop: Callable[[], None] | None = None,
         pulse: bool = False,
         ornaments: bool = True,
+        stay_while: Callable[[], bool] | None = None,
     ) -> None:
         super().__init__(master)
         self.accent = accent
@@ -137,6 +138,11 @@ class Banner(_Popup):
         self.total_ms = max(3, int(seconds)) * 1000
         self.left_ms = self.total_ms
         self._phase = 0.0
+        # Tant que cette fonction renvoie True (l'adhan joue encore), le
+        # minuteur d'auto-fermeture boucle au lieu de fermer la carte : sans
+        # ca, un delai d'affichage trop court laisserait l'adhan continuer
+        # sans plus aucun moyen de l'arreter depuis la notification.
+        self.stay_while = stay_while
 
         # Ecran et echelle resolus a l'affichage : suit les changements de setup.
         self.screen = screens.screen_at(screen_index)
@@ -274,8 +280,11 @@ class Banner(_Popup):
         x1, x2, y = self._bar_span
         self.canvas.coords(self._bar, x1, y, x1 + (x2 - x1) * ratio, y + 3 * self.S)
         if self.left_ms <= 0:
-            self.dismiss()
-            return
+            if self.stay_while and self.stay_while():
+                self.left_ms = self.total_ms  # l'adhan joue encore : on reboucle
+            else:
+                self.dismiss()
+                return
         self._after(100, self._tick)
 
     def _stop(self) -> None:
@@ -482,6 +491,7 @@ class Fullscreen(_Popup):
         screen_index: int = 0,
         on_stop: Callable[[], None] | None = None,
         ornaments: bool = True,
+        stay_while: Callable[[], bool] | None = None,
     ) -> None:
         super().__init__(master, alpha=0.86)
         self.accent = accent
@@ -489,6 +499,7 @@ class Fullscreen(_Popup):
         self.total_ms = max(5, int(seconds)) * 1000
         self.left_ms = self.total_ms
         self._phase = 0.0
+        self.stay_while = stay_while
 
         screen = screens.screen_at(screen_index)
         # Le voile epouse la resolution reelle de l'ecran choisi.
@@ -600,8 +611,11 @@ class Fullscreen(_Popup):
         x1, x2, y = self._bar_span
         self.canvas.coords(self._bar, x1, y, x1 + (x2 - x1) * ratio, y + 4 * self.S)
         if self.left_ms <= 0:
-            self.dismiss()
-            return
+            if self.stay_while and self.stay_while():
+                self.left_ms = self.total_ms  # l'adhan joue encore : on reboucle
+            else:
+                self.dismiss()
+                return
         self._after(200, self._tick)
 
     def _stop(self) -> None:

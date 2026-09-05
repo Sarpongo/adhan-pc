@@ -1,6 +1,6 @@
 # Adhan PC
 
-**[Télécharger l'installateur (AdhanPC-Setup-1.1.1.exe)](https://github.com/Sarpongo/adhan-pc/releases/latest)**
+**[Télécharger l'installateur (AdhanPC-Setup-1.1.2.exe)](https://github.com/Sarpongo/adhan-pc/releases/latest)**
 
 Application de bureau (Windows) qui affiche les horaires de prière de votre
 mosquée — récupérés sur **Mawaqit** — et déclenche des rappels puis l'adhan
@@ -32,7 +32,7 @@ en son, avec des notifications personnalisables.
 
 ## Installation (utilisateur final)
 
-Le plus simple : téléchargez `installer_output\AdhanPC-Setup-1.1.1.exe` et
+Le plus simple : téléchargez `installer_output\AdhanPC-Setup-1.1.2.exe` et
 lancez-le. C'est un installateur classique (assistant en français) qui
 n'installe rien pour Python — tout est embarqué. Aucun droit administrateur
 n'est requis (installation dans le profil utilisateur). Il propose :
@@ -70,7 +70,7 @@ Le programme d'installation est écrit dans `installer_output\`. Le script
 automatique et le désinstalleur ; `dist\AdhanPC\` (généré par PyInstaller)
 en est la source. Ces deux dossiers, ainsi que `build\`, sont des artefacts
 reconstructibles — inutile de les partager avec les sources, seul
-`AdhanPC-Setup-1.1.1.exe` suffit pour diffuser l'application.
+`AdhanPC-Setup-1.1.2.exe` suffit pour diffuser l'application.
 
 ## Démarrage automatique
 

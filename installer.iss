@@ -6,7 +6,7 @@
 ; Necessite que dist\AdhanPC\ existe deja (build PyInstaller prealable).
 
 #define MyAppName "Adhan PC"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.1.2"
 #define MyAppPublisher "Adhan PC"
 #define MyAppExeName "AdhanPC.exe"
 #define MyAppSourceDir "dist\AdhanPC"
