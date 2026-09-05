@@ -1,5 +1,7 @@
 # Adhan PC
 
+**[Télécharger l'installateur (AdhanPC-Setup-1.0.0.exe)](https://github.com/Sarpongo/adhan-pc/releases/latest)**
+
 Application de bureau (Windows) qui affiche les horaires de prière de votre
 mosquée — récupérés sur **Mawaqit** — et déclenche des rappels puis l'adhan
 en son, avec des notifications personnalisables.
